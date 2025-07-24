@@ -1,25 +1,37 @@
-import time
+
 import os
-from telegram import Bot
+from datetime import datetime
+from mlb_analysis import get_tomorrow_mlb_games, analyze_mlb_game
+from core import get_tomorrow_fixtures, analyze_match, update_google_sheets
 
-# Lee las variables del entorno desde Railway
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+def run_full_analysis():
+    print("🧠 Análisis completo iniciado...")
 
-bot = Bot(token=BOT_TOKEN)
+    # Fútbol
+    fixtures = get_tomorrow_fixtures()
+    main_leagues = [
+        "Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1",
+        "Liga MX", "Eredivisie", "UEFA Champions League", "Leagues Cup"
+    ]
+    expert_picks = []
+    for match in fixtures:
+        if match["league"]["name"] in main_leagues:
+            result = analyze_match(match)
+            expert_picks.append(result)
 
-def enviar_picks():
-    mensaje = (
-        "🔥 *PICKS SERPICKS DEL DÍA* 🔥\n\n"
-        "✅ *Pick 1:* Real Madrid gana\n"
-        "✅ *Pick 2:* Menos de 2.5 goles en el partido\n"
-        "✅ *Pick 3:* Ambos anotan: NO en el juego\n"
-        "📊 Análisis completo en camino.\n\n"
-        "💵 *Parlay del día:* +350\n"
-        "🕒 Enviado automáticamente por SERPICKS\n"
-        "#Confianza #Análisis #Ganancias"
-    )
-    bot.send_message(chat_id=CHAT_ID, text=mensaje, parse_mode="Markdown")
+    # MLB
+    mlb_games = get_tomorrow_mlb_games()
+    for game in mlb_games[:3]:  # Tomar máximo 3 juegos con valor
+        result = analyze_mlb_game(game)
+        expert_picks.append(result)
 
-if __name__ == "__main__":
-    enviar_picks()
+    if expert_picks:
+        print(f"✅ {len(expert_picks)} picks seleccionados (Fútbol + MLB):")
+        for p in expert_picks:
+            print(f"🏟️ {p['match']} | {p['pick']} ({p['confidence']})")
+            print(f"🧠 {p['reason']}")
+            print("-" * 40)
+        update_google_sheets(expert_picks)
+        print("📤 Picks enviados a Telegram (simulado)")
+    else:
+        print("⛔ No hay partidos con valor para mañana.")
