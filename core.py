@@ -1,3 +1,5 @@
+import os
+from telegram import Bot
 import requests
 from datetime import datetime, timedelta
 
@@ -40,3 +42,21 @@ def analyze_match(match):
 def update_google_sheets(picks):
     # Aquí puedes conectar a Google Sheets real si ya tienes las credenciales
     print("📊 Estadísticas actualizadas en Google Sheets correctamente.")
+    def send_to_telegram(picks):
+    if not picks:
+        print("No hay picks para enviar.")
+        return
+
+    message = "🔥 *PICKS SERPICKS* 🔥\n\n"
+    for p in picks:
+        message += f"🏟 {p['match']}\n📌 *Pick:* {p['pick']}\n🧠 {p['reason']}\n\n"
+    message += "✅ *Apuesta con disciplina y estrategia.*\n"
+
+    bot = Bot(token=os.getenv("BOT_TOKEN"))
+    chat_id = os.getenv("CHAT_ID")
+
+    try:
+        bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+        print("✅ Picks enviados a Telegram.")
+    except Exception as e:
+        print("❌ Error enviando a Telegram:", e)
