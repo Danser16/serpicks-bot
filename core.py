@@ -60,3 +60,33 @@ def update_google_sheets(picks):
         print("✅ Picks enviados a Telegram.")
     except Exception as e:
         print("❌ Error enviando a Telegram:", e)
+        import os
+import requests
+
+def send_to_telegram(picks):
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    CHAT_ID = os.getenv("CHAT_ID")
+
+    if not BOT_TOKEN or not CHAT_ID:
+        print("Faltan variables de entorno BOT_TOKEN o CHAT_ID.")
+        return
+
+    if not picks:
+        message = "⚠️ No hay partidos con valor hoy."
+    else:
+        message = "🔥 *PICKS DEL DÍA* 🔥\n\n"
+        for pick in picks:
+            message += f"📌 {pick['match']}\n✅ *Pick:* {pick['pick']}\n\n"
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+
+    response = requests.post(url, data=data)
+    if response.status_code != 200:
+        print("❌ Error al enviar a Telegram:", response.text)
+    else:
+        print("✅ Picks enviados a Telegram con éxito.")
