@@ -3,6 +3,21 @@ import os
 from datetime import datetime
 from mlb_analysis import get_tomorrow_mlb_games, analyze_mlb_game
 from core import get_tomorrow_fixtures, analyze_match, update_google_sheets
+from core import get_tomorrow_fixtures, analyze_match, send_to_telegram
+
+def main():
+    matches = get_tomorrow_fixtures()
+    expert_picks = []
+
+    for match in matches:
+        prediction = analyze_match(match)
+        if prediction:
+            expert_picks.append(prediction)
+
+    send_to_telegram(expert_picks)
+
+if __name__ == "__main__":
+    main()
 
 def run_full_analysis():
     print("🧠 Análisis completo iniciado...")
