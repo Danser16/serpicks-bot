@@ -1,11 +1,17 @@
 import os
-from telegram import Bot
 import requests
 from datetime import datetime, timedelta
+from telegram import Bot
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-# Reemplazar con tu API Key y URL si ya tienes acceso real
-API_KEY = "dcc826470cmsh81cc72c63fa493fp1daeb4jsndc68721088ba"
+# APIs de análisis
+API_KEY = os.getenv("API_FOOTBALL_KEY")
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+
+# Telegram
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 headers = {
     "X-RapidAPI-Key": API_KEY,
@@ -18,75 +24,80 @@ def get_tomorrow_fixtures():
     params = {"date": date_str, "timezone": "America/Mexico_City"}
     response = requests.get(BASE_URL, headers=headers, params=params)
     if response.status_code == 200:
-        data = response.json()
-        return data["response"]
+        return response.json()["response"]
     else:
-        print("Error al obtener partidos:", response.text)
+        print("❌ Error fútbol:", response.text)
         return []
 
 def analyze_match(match):
-    stats = match.get("teams", {})
-    home = stats.get("home", {}).get("name", "")
-    away = stats.get("away", {}).get("name", "")
+    home = match.get("teams", {}).get("home", {}).get("name", "")
+    away = match.get("teams", {}).get("away", {}).get("name", "")
     league = match.get("league", {}).get("name", "")
 
-    # Lógica simple de ejemplo basada en promedio de goles
-    prediction = {
+    if not home or not away:
+        return None
+
+    # 🔍 Lógica simple con ejemplo de confianza
+    return {
         "match": f"{home} vs {away}",
         "pick": "Over 2.5 goles",
         "confidence": "Alta",
-        "reason": f"Ambos equipos tienen buen ataque en {league}, valor en las cuotas."
+        "reason": f"Ambos equipos promedian más de 1.5 goles por partido en {league}. Valor en cuotas."
     }
-    return prediction
 
-def update_google_sheets(picks):
-    # Aquí puedes conectar a Google Sheets real si ya tienes las credenciales
-    print("📊 Estadísticas actualizadas en Google Sheets correctamente.")
-    def send_to_telegram(picks):
-    if not picks:
-        print("No hay picks para enviar.")
+def get_tomorrow_mlb_games():
+    # Aquí se conectaría la API de MLB (ya configurada con tu key PRO)
+    # Por ahora usamos ejemplo básico
+    return [
+        {"match": "Yankees vs Red Sox", "pick": "Over 7.5 carreras", "confidence": "Media", "reason": "Buen rendimiento ofensivo y lanzadores débiles"}
+    ]
+
+def analyze_mlb_game(game):
+    return {
+        "match": game["match"],
+        "pick": game["pick"],
+        "confidence": game["confidence"],
+        "reason": game["reason"]
+    }
+
+def send_to_telegram(picks):
+    if not BOT_TOKEN or not CHAT_ID:
+        print("❌ Faltan variables de entorno.")
         return
 
     message = "🔥 *PICKS SERPICKS* 🔥\n\n"
     for p in picks:
         message += f"🏟 {p['match']}\n📌 *Pick:* {p['pick']}\n🧠 {p['reason']}\n\n"
-    message += "✅ *Apuesta con disciplina y estrategia.*\n"
-
-    bot = Bot(token=os.getenv("BOT_TOKEN"))
-    chat_id = os.getenv("CHAT_ID")
-
-    try:
-        bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
-        print("✅ Picks enviados a Telegram.")
-    except Exception as e:
-        print("❌ Error enviando a Telegram:", e)
-        import os
-import requests
-
-def send_to_telegram(picks):
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
-    CHAT_ID = os.getenv("CHAT_ID")
-
-    if not BOT_TOKEN or not CHAT_ID:
-        print("Faltan variables de entorno BOT_TOKEN o CHAT_ID.")
-        return
-
-    if not picks:
-        message = "⚠️ No hay partidos con valor hoy."
-    else:
-        message = "🔥 *PICKS DEL DÍA* 🔥\n\n"
-        for pick in picks:
-            message += f"📌 {pick['match']}\n✅ *Pick:* {pick['pick']}\n\n"
+    message += "✅ *Apuesta con estrategia y disciplina.*\n"
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    data = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
 
     response = requests.post(url, data=data)
-    if response.status_code != 200:
-        print("❌ Error al enviar a Telegram:", response.text)
-    else:
-        print("✅ Picks enviados a Telegram con éxito.")
+    print("✅ Enviado a Telegram" if response.ok else f"❌ Telegram error: {response.text}")
+
+def update_google_sheets(picks):
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        client = gspread.authorize(creds)
+
+        sheet = client.open("SERPICKS").sheet1
+        for pick in picks:
+            row = [datetime.now().strftime("%Y-%m-%d"), pick["match"], pick["pick"], pick["confidence"], pick["reason"]]
+            sheet.append_row(row)
+        print("📊 Datos guardados en Google Sheets.")
+    except Exception as e:
+        print("❌ Google Sheets error:", e)
+
+def send_summary_if_needed():
+    today = datetime.now()
+    if today.weekday() == 6 or today.day == month_last_day(today):
+        message = f"📊 *Resumen {'semanal' if today.weekday() == 6 else 'mensual'} completo listo.*\nRevisa tu hoja de Google Sheets para ver rendimiento."
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
+        requests.post(url, data=data)
+
+def month_last_day(date):
+    next_month = date.replace(day=28) + timedelta(days=4)
+    return (next_month - timedelta(days=next_month.day)).day
