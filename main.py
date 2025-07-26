@@ -50,7 +50,7 @@ def run_full_analysis():
     else:
         print("⛔ No hay partidos con valor para mañana.")
         
-        def analyze_today_liga_mx():
+def analyze_today_liga_mx():
     from core import get_todays_liga_mx_fixtures, analyze_match, send_to_telegram, update_google_sheets
 
     fixtures = get_todays_liga_mx_fixtures()
