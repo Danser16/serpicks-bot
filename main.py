@@ -15,8 +15,6 @@ def main():
 
     send_to_telegram(expert_picks)
 
-if __name__ == "__main__":
-    analyze_today_liga_mx()
 
 def run_full_analysis():
     print("🧠 Análisis completo iniciado...")
@@ -74,3 +72,6 @@ def analyze_today_liga_mx():
         update_google_sheets(expert_picks)
     else:
         print("📭 No hubo picks con valor en Liga MX hoy.")
+        
+        if __name__ == "__main__":
+    analyze_today_liga_mx()
