@@ -71,10 +71,18 @@ def send_to_telegram(picks):
     message += "✅ *Apuesta con estrategia y disciplina.*\n"
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
 
-    response = requests.post(url, data=data)
-    print("✅ Enviado a Telegram" if response.ok else f"❌ Telegram error: {response.text}")
+    # 🔄 Dividir si supera el límite
+    max_length = 4096
+    messages = [message[i:i+max_length] for i in range(0, len(message), max_length)]
+
+    for msg in messages:
+        data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
+        response = requests.post(url, data=data)
+        if response.ok:
+            print("✅ Enviado a Telegram")
+        else:
+            print(f"❌ Telegram error: {response.text}")
 
 def update_google_sheets(picks):
     try:
