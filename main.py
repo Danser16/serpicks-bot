@@ -73,5 +73,5 @@ def analyze_today_liga_mx():
     else:
         print("📭 No hubo picks con valor en Liga MX hoy.")
         
-        if __name__ == "__main__":
+if __name__ == "__main__":
     analyze_today_liga_mx()
