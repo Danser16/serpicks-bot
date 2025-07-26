@@ -1,4 +1,3 @@
-
 import os
 from datetime import datetime
 from mlb_analysis import get_tomorrow_mlb_games, analyze_mlb_game
@@ -17,7 +16,7 @@ def main():
     send_to_telegram(expert_picks)
 
 if __name__ == "__main__":
-    main()
+    analyze_today_liga_mx()
 
 def run_full_analysis():
     print("🧠 Análisis completo iniciado...")
@@ -50,3 +49,28 @@ def run_full_analysis():
         print("📤 Picks enviados a Telegram (simulado)")
     else:
         print("⛔ No hay partidos con valor para mañana.")
+        
+        def analyze_today_liga_mx():
+    from core import get_todays_liga_mx_fixtures, analyze_match, send_to_telegram, update_google_sheets
+
+    fixtures = get_todays_liga_mx_fixtures()
+    expert_picks = []
+
+    for match in fixtures:
+        result = analyze_match(match)
+        if result:
+            expert_picks.append(result)
+
+    expert_picks = expert_picks[:5]  # Máximo 5 picks con valor
+
+    if expert_picks:
+        print(f"✅ {len(expert_picks)} picks Liga MX encontrados:")
+        for p in expert_picks:
+            print(f"🏟 {p['match']}")
+            print(f"📌 Pick: {p['pick']}")
+            print(f"🧠 {p['reason']}")
+            print("-" * 40)
+        send_to_telegram(expert_picks)
+        update_google_sheets(expert_picks)
+    else:
+        print("📭 No hubo picks con valor en Liga MX hoy.")
