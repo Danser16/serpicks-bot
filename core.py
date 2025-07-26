@@ -29,20 +29,70 @@ def get_tomorrow_fixtures():
         print("❌ Error fútbol:", response.text)
         return []
 
-def analyze_match(match):
-    home = match.get("teams", {}).get("home", {}).get("name", "")
-    away = match.get("teams", {}).get("away", {}).get("name", "")
-    league = match.get("league", {}).get("name", "")
+def get_todays_liga_mx_fixtures():
+    today = datetime.now().strftime('%Y-%m-%d')
+    params = {"date": today, "timezone": "America/Mexico_City"}
+    response = requests.get(BASE_URL, headers=headers, params=params)
+    if response.status_code != 200:
+        print("❌ Error obteniendo partidos de hoy")
+        return []
 
-    if not home or not away:
+    all_matches = response.json().get("response", [])
+    liga_mx_matches = [m for m in all_matches if m.get("league", {}).get("name", "") == "Liga MX"]
+    return liga_mx_matches
+        
+
+def analyze_match(match):
+    import statistics
+
+    league_name = match.get("league", {}).get("name", "")
+    if "Liga MX" not in league_name:
+        return None  # Solo Liga MX
+
+    teams = match.get("teams", {})
+    stats = match.get("teams", {})
+
+    home_team = teams.get("home", {}).get("name", "")
+    away_team = teams.get("away", {}).get("name", "")
+
+    # Seguridad básica
+    if not home_team or not away_team:
         return None
 
-    # 🔍 Lógica simple con ejemplo de confianza
+    # Goles promedio en últimos partidos
+    home_stats = match.get("statistics", {}).get("home", {})
+    away_stats = match.get("statistics", {}).get("away", {})
+
+    # Promedios de goles marcados y recibidos
+    try:
+        home_goals_for = home_stats["goals"]["for"]["average"]["total"]
+        away_goals_for = away_stats["goals"]["for"]["average"]["total"]
+        home_goals_against = home_stats["goals"]["against"]["average"]["total"]
+        away_goals_against = away_stats["goals"]["against"]["average"]["total"]
+    except:
+        return None
+
+    # Calcular promedio general
+    avg_total_goals = statistics.mean([
+        float(home_goals_for or 0), float(away_goals_for or 0),
+        float(home_goals_against or 0), float(away_goals_against or 0)
+    ])
+
+    # Lógica de apuesta según análisis
+    if avg_total_goals > 3.0:
+        pick = "Over 2.5 goles"
+        reason = f"Promedio de goles combinado de ambos equipos es de {round(avg_total_goals, 2)}. Tendencia alta de goles en Liga MX."
+    elif avg_total_goals < 2.0:
+        pick = "Under 2.5 goles"
+        reason = f"Equipos con tendencia baja de goles. Promedio combinado: {round(avg_total_goals, 2)}."
+    else:
+        return None  # No hay valor claro
+
     return {
-        "match": f"{home} vs {away}",
-        "pick": "Over 2.5 goles",
-        "confidence": "Alta",
-        "reason": f"Ambos equipos promedian más de 1.5 goles por partido en {league}. Valor en cuotas."
+        "match": f"{home_team} vs {away_team}",
+        "pick": pick,
+        "confidence": "Alta" if avg_total_goals > 3.0 or avg_total_goals < 2.0 else "Media",
+        "reason": reason
     }
 
 def get_tomorrow_mlb_games():
