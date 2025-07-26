@@ -159,3 +159,69 @@ def send_summary_if_needed():
 def month_last_day(date):
     next_month = date.replace(day=28) + timedelta(days=4)
     return (next_month - timedelta(days=next_month.day)).day
+    
+    
+    def analyze_match_v2(match):
+    import statistics
+
+    # Seguridad y nombres
+    league = match.get("league", {}).get("name", "")
+    home_team = match.get("teams", {}).get("home", {}).get("name", "")
+    away_team = match.get("teams", {}).get("away", {}).get("name", "")
+
+    if not home_team or not away_team:
+        return None
+
+    stats_home = match.get("statistics", {}).get("home", {})
+    stats_away = match.get("statistics", {}).get("away", {})
+
+    try:
+        # xG (expected goals)
+        xg_home = float(stats_home["expected"]["goals"])
+        xg_away = float(stats_away["expected"]["goals"])
+
+        # Goles promedio últimos partidos
+        avg_gf_home = float(stats_home["goals"]["for"]["average"]["total"])
+        avg_gf_away = float(stats_away["goals"]["for"]["average"]["total"])
+        avg_ga_home = float(stats_home["goals"]["against"]["average"]["total"])
+        avg_ga_away = float(stats_away["goals"]["against"]["average"]["total"])
+    except:
+        return None  # Si faltan datos, no se analiza
+
+    # Promedio ofensivo y defensivo
+    avg_total_goals = statistics.mean([avg_gf_home, avg_gf_away, avg_ga_home, avg_ga_away])
+    avg_xg = xg_home + xg_away
+
+    # Probabilidad implícita de la cuota (ej: cuota 2.00 = 50%)
+    odds = match.get("odds", {}).get("2.5", {})
+    over_odds = float(odds.get("over", 0))
+    under_odds = float(odds.get("under", 0))
+
+    if over_odds > 0 and under_odds > 0:
+        prob_over = round(100 / over_odds, 2)
+        prob_under = round(100 / under_odds, 2)
+    else:
+        prob_over = prob_under = 0
+
+    # Lógica para Over 2.5
+    if avg_total_goals >= 3 or avg_xg >= 3:
+        if prob_over < 60:
+            return {
+                "match": f"{home_team} vs {away_team}",
+                "pick": "Over 2.5 goles",
+                "confidence": "Alta",
+                "reason": f"xG combinado: {avg_xg:.2f}, promedio de goles: {avg_total_goals:.2f}, prob. implícita: {prob_over}%"
+            }
+
+    # Lógica para Under 2.5
+    if avg_total_goals < 2 and avg_xg < 2:
+        if prob_under < 60:
+            return {
+                "match": f"{home_team} vs {away_team}",
+                "pick": "Under 2.5 goles",
+                "confidence": "Alta",
+                "reason": f"xG bajo ({avg_xg:.2f}) y promedio de goles reducido ({avg_total_goals:.2f}). Prob. implícita: {prob_under}%"
+            }
+
+    # Si no hay valor, no se manda
+    return None
