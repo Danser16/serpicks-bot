@@ -28,7 +28,7 @@ def run_full_analysis():
     expert_picks = []
     for match in fixtures:
         if match["league"]["name"] in main_leagues:
-            result = analyze_match(match)
+            result = analyze_match_v2(match)
             expert_picks.append(result)
 
     # MLB
