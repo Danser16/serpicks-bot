@@ -161,8 +161,6 @@ def month_last_day(date):
     return (next_month - timedelta(days=next_month.day)).day
     
     
-    def analyze_match_v2(match):
-    import statistics
 
     # Seguridad y nombres
     league = match.get("league", {}).get("name", "")
