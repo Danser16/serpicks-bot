@@ -75,3 +75,27 @@ def analyze_today_liga_mx():
         
 if __name__ == "__main__":
     analyze_today_liga_mx()
+    
+    from mlb_analysis import get_todays_mlb_games, analyze_mlb_game_v2
+from core import send_to_telegram, update_google_sheets
+
+def analyze_today_mlb():
+    print("⚾ Analizando MLB de hoy...")
+    games = get_todays_mlb_games()
+    picks = []
+
+    for game in games:
+        result = analyze_mlb_game_v2(game)
+        if result:
+            picks.append(result)
+
+    picks = picks[:5]  # Limitar picks por seguridad
+
+    if picks:
+        print(f"✅ {len(picks)} picks MLB seleccionados:")
+        for p in picks:
+            print(f"🏟 {p['match']} | {p['pick']}\n🧠 {p['reason']}\n")
+        send_to_telegram(picks)
+        update_google_sheets(picks)
+    else:
+        print("📭 No hubo picks con valor en MLB hoy.")
