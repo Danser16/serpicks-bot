@@ -10,28 +10,50 @@ headers = {
     "X-RapidAPI-Host": "api-baseball.p.rapidapi.com"
 }
 
-def get_tomorrow_mlb_games():
-    tomorrow = datetime.now() + timedelta(days=1)
-    date_str = tomorrow.strftime('%Y-%m-%d')
-    params = {"date": date_str, "league": "1"}  # Cambia "league" si es necesario
+def get_todays_mlb_games():
+    today = datetime.now().strftime('%Y-%m-%d')
+    params = {"date": today, "league": "1", "season": "2024"}  # Liga 1 = MLB
     response = requests.get(BASE_URL, headers=headers, params=params)
+    
     if response.status_code == 200:
-        return response.json()["response"]
+        return response.json().get("response", [])
     else:
-        print("❌ Error al obtener partidos MLB:", response.text)
+        print("❌ Error MLB:", response.text)
         return []
+def analyze_mlb_game_v2(game):
+    home = game["teams"]["home"]["name"]
+    away = game["teams"]["away"]["name"]
 
-def analyze_mlb_game(game):
-    teams = game.get("teams", {})
-    home = teams.get("home", {}).get("name", "")
-    away = teams.get("away", {}).get("name", "")
-    match_str = f"{home} vs {away}"
+    try:
+        stats = game.get("teams", {})
+        runs_home = float(game["scores"]["home"]["total"])
+        runs_away = float(game["scores"]["away"]["total"])
+    except:
+        return None
 
-    # Lógica de ejemplo, la mejoraremos con stats reales
-    prediction = {
-        "match": match_str,
-        "pick": "Over 7.5 carreras",
-        "confidence": "Media",
-        "reason": f"Ambos equipos tienen buen promedio de hits recientes, valor en las líneas."
+    # Análisis simplificado de lógica ofensiva
+    total_runs = runs_home + runs_away
+    pick = None
+    reason = ""
+
+    if total_runs >= 9:
+        pick = "Over 8.5 carreras"
+        reason = f"{home} y {away} promedian {total_runs:.1f} carreras por partido combinadas. Potencial ofensivo alto."
+    elif total_runs <= 6:
+        pick = "Under 7.5 carreras"
+        reason = f"{home} y {away} han tenido bajos totales recientemente. Promedio combinado: {total_runs:.1f}."
+
+    if not pick:
+        if runs_home > runs_away:
+            pick = f"Gana {home}"
+            reason = f"{home} ha anotado más que {away} recientemente. Ventaja ofensiva."
+        else:
+            pick = f"Gana {away}"
+            reason = f"{away} muestra mejor forma ofensiva que {home}."
+
+    return {
+        "match": f"{home} vs {away}",
+        "pick": pick,
+        "confidence": "Alta",
+        "reason": reason
     }
-    return prediction
