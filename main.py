@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from mlb_analysis import get_tomorrow_mlb_games, analyze_mlb_game
+from mlb_analysis import get_todays_mlb_games, analyze_mlb_game_v2
 from core import get_tomorrow_fixtures, analyze_match, update_google_sheets
 from core import get_tomorrow_fixtures, analyze_match, send_to_telegram
 
