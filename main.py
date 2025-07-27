@@ -99,3 +99,5 @@ def analyze_today_mlb():
         update_google_sheets(picks)
     else:
         print("📭 No hubo picks con valor en MLB hoy.")
+if __name__ == "__main__":
+    analyze_today_mlb()
