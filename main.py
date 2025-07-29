@@ -36,6 +36,9 @@ def main():
 
     if selected_picks:
         print(f"✅ Enviando {len(selected_picks)} picks a Telegram...")
+        print(f"Total de picks generados: {len(all_picks)}")
+    for p in selected_picks:
+    print(p)
         send_to_telegram(selected_picks)
     else:
         print("⚠️ No se generaron picks.")
