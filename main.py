@@ -30,9 +30,9 @@ def main():
             mlb_picks.append(pick)
 
     # 3. Juntar y limitar a 10 picks máximo
-    all_picks = futbol_picks + mlb_picks
-    max_picks = 10
-    selected_picks = all_picks[:max_picks]
+all_picks = futbol_picks + mlb_picks
+max_picks = 10
+selected_picks = all_picks[:max_picks]
 
 if selected_picks:
     print(f"✅ Enviando {len(selected_picks)} picks a Telegram...")
@@ -43,4 +43,4 @@ if selected_picks:
 else:
     print("⚠️ No se generaron picks.")
 
-    update_google_sheets_summary()
+update_google_sheets_summary()
