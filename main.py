@@ -34,7 +34,7 @@ def main():
     max_picks = 10
     selected_picks = all_picks[:max_picks]
 
-    if selected_picks:
+if selected_picks:
     print(f"✅ Enviando {len(selected_picks)} picks a Telegram...")
     print(f"Total de picks generados: {len(all_picks)}")
     for p in selected_picks:
