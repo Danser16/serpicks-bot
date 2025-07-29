@@ -35,12 +35,12 @@ def main():
     selected_picks = all_picks[:max_picks]
 
     if selected_picks:
-        print(f"✅ Enviando {len(selected_picks)} picks a Telegram...")
-        print(f"Total de picks generados: {len(all_picks)}")
+    print(f"✅ Enviando {len(selected_picks)} picks a Telegram...")
+    print(f"Total de picks generados: {len(all_picks)}")
     for p in selected_picks:
-    print(p)
-        send_to_telegram(selected_picks)
-    else:
-        print("⚠️ No se generaron picks.")
+        print(p)
+    send_to_telegram(selected_picks)
+else:
+    print("⚠️ No se generaron picks.")
 
     update_google_sheets_summary()
