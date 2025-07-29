@@ -6,7 +6,7 @@ from core import (
     send_to_telegram,
     update_google_sheets_summary
 )
-from mlb_analysis import get_today_mlb_games, analyze_mlb_game_v2
+from mlb_analysis import get_todays_mlb_games, analyze_mlb_game_v2
 
 def main():
     print("🎯 Iniciando análisis experto de partidos del día...")
@@ -21,7 +21,7 @@ def main():
             futbol_picks.append(prediction)
 
     # 2. Análisis de MLB
-    mlb_games = get_today_mlb_games()
+    mlb_games = get_todays_mlb_games()
     mlb_picks = []
 
     for game in mlb_games:
