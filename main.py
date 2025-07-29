@@ -29,17 +29,15 @@ def main():
         if pick:
             mlb_picks.append(pick)
 
-    # 3. Juntar picks y enviarlos
+    # 3. Juntar y limitar a 10 picks máximo
     all_picks = futbol_picks + mlb_picks
+    max_picks = 10
+    selected_picks = all_picks[:max_picks]
 
-    if all_picks:
-        print(f"✅ {len(all_picks)} picks generados, enviando a Telegram...")
-        send_to_telegram(all_picks)
+    if selected_picks:
+        print(f"✅ Enviando {len(selected_picks)} picks a Telegram...")
+        send_to_telegram(selected_picks)
     else:
-        print("⚠️ No se generaron picks para hoy. Revisa si hay partidos activos.")
+        print("⚠️ No se generaron picks.")
 
-    # 4. Actualizar hoja de cálculo (resumen diario)
     update_google_sheets_summary()
-
-if __name__ == "__main__":
-    main()
