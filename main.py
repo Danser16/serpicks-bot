@@ -1,4 +1,4 @@
-from core import get_today_fixtures, analyze_match_v3, send_to_telegram, update_google_sheets_summary
+from core import get_today_fixtures, analyze_match_v3, send_to_telegram
 
 def main():
     print("🔍 Obteniendo partidos de hoy...")
@@ -18,7 +18,6 @@ def main():
     print(f"✅ Total de picks generados: {len(picks)}")
 
     send_to_telegram(picks)
-    update_google_sheets_summary()
 
 if __name__ == "__main__":
     main()
