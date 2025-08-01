@@ -2,12 +2,11 @@ import os
 import requests
 from datetime import datetime
 from telegram import Bot
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 # API-Football
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 BASE_URL = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+ODDS_URL = "https://api-football-v1.p.rapidapi.com/v3/odds"
 headers = {
     "X-RapidAPI-Key": API_KEY,
     "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
@@ -19,8 +18,8 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 # Ligas importantes
 IMPORTANT_LEAGUES = [
-    "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1", "Liga MX",
-    "Eredivisie", "UEFA Champions League", "Leagues Cup"
+    "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1",
+    "Liga MX", "Eredivisie", "UEFA Champions League", "Leagues Cup"
 ]
 
 # 🔍 Obtener partidos de hoy
@@ -35,19 +34,55 @@ def get_today_fixtures():
         print("❌ Error fútbol:", response.text)
         return []
 
-# 🧠 Análisis experto por partido (1 sola apuesta)
+# 🔢 Obtener momios reales del fixture
+def get_odds_for_fixture(fixture_id):
+    params = {"fixture": fixture_id}
+    response = requests.get(ODDS_URL, headers=headers, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data["response"]:
+            bookmakers = data["response"][0].get("bookmakers", [])
+            if not bookmakers:
+                return {}
+            markets = bookmakers[0].get("bets", [])
+            odds_data = {}
+            for market in markets:
+                name = market.get("name", "")
+                values = market.get("values", [])
+                if name == "Match Winner":
+                    odds_data["1x2"] = {
+                        "home": float(values[0]["odd"]),
+                        "draw": float(values[1]["odd"]),
+                        "away": float(values[2]["odd"])
+                    }
+                elif name == "Double Chance":
+                    odds_data["doubleChance"] = {
+                        val["value"]: float(val["odd"]) for val in values
+                    }
+                elif name == "Over/Under":
+                    for val in values:
+                        if val["value"] == "Over 2.5":
+                            odds_data.setdefault("2.5", {})["over"] = float(val["odd"])
+                        elif val["value"] == "Under 2.5":
+                            odds_data.setdefault("2.5", {})["under"] = float(val["odd"])
+            return odds_data
+    return {}
+
+# 🧠 Análisis por partido
 def analyze_match_v3(match):
     home = match.get("teams", {}).get("home", {})
     away = match.get("teams", {}).get("away", {})
     home_team = home.get("name", "")
     away_team = away.get("name", "")
-    league = match.get("league", {}).get("name", "")
+    fixture_id = match.get("fixture", {}).get("id")
 
-    if not home_team or not away_team:
+    if not home_team or not away_team or not fixture_id:
         return None
 
-    odds = match.get("odds", {})
-    xg_home = xg_away = 1.1  # Suponemos si no hay datos
+    odds = get_odds_for_fixture(fixture_id)
+
+    xg_home = xg_away = 1.1  # Supuesto si no hay datos
 
     try:
         stats = match.get("statistics", {})
@@ -58,7 +93,7 @@ def analyze_match_v3(match):
 
     picks = []
 
-    # 1X2 (Ganador)
+    # 🏆 Ganador
     if "1x2" in odds:
         best = min(odds["1x2"].items(), key=lambda x: x[1])
         winner = {"home": "Gana local", "draw": "Empate", "away": "Gana visitante"}.get(best[0], "")
@@ -68,7 +103,7 @@ def analyze_match_v3(match):
             "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* {winner}\n🔢 *Cuota:* {best[1]}\n🎯 *Probabilidad implícita:* {round(100 / best[1], 2)}%"
         })
 
-    # Doble oportunidad
+    # 🛡 Doble oportunidad
     if "doubleChance" in odds:
         best = min(odds["doubleChance"].items(), key=lambda x: x[1])
         picks.append({
@@ -77,7 +112,7 @@ def analyze_match_v3(match):
             "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Doble oportunidad {best[0]}\n🔢 *Cuota:* {best[1]}\n🎯 *Probabilidad implícita:* {round(100 / best[1], 2)}%"
         })
 
-    # Over/Under goles
+    # 🎯 Over/Under
     if "2.5" in odds:
         over_odds = odds["2.5"].get("over")
         under_odds = odds["2.5"].get("under")
@@ -99,7 +134,7 @@ def analyze_match_v3(match):
     if not picks:
         return None
 
-    # Elegimos el pick con mayor probabilidad (menor riesgo)
+    # Elegir mejor pick
     best_pick = max(picks, key=lambda x: x["valor"])
     if best_pick["valor"] < 60:
         best_pick["text"] += "\n⚠️ *Valor bajo, pick de riesgo. Juega con cautela.*"
@@ -114,7 +149,7 @@ def send_to_telegram(picks):
         return
 
     if not picks:
-        message = "⚠️ *No se encontraron picks sólidos para hoy.*\nAún así, sigue revisando estadísticas y mantente atento. 📊"
+        message = "⚠️ *No se encontraron picks sólidos para hoy.*\nSigue atento a los análisis. 📊"
     else:
         message = "🔥 *PICKS SERPICKS (Manual)* 🔥\n\n"
         for p in picks:
@@ -131,16 +166,3 @@ def send_to_telegram(picks):
             print("✅ Enviado a Telegram")
         else:
             print(f"❌ Telegram error: {response.text}")
-
-# 📊 Guardar picks en Google Sheets
-def update_google_sheets_summary():
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-        client = gspread.authorize(creds)
-        sheet = client.open("SERPICKS").sheet1
-        now = datetime.now().strftime("%Y-%m-%d")
-        sheet.append_row([now, "Auto-run", "Manual execution ran", "", ""])
-        print("📊 Registro guardado en Sheets.")
-    except Exception as e:
-        print("❌ Error Google Sheets:", e)
