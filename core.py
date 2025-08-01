@@ -1,7 +1,6 @@
 import os
 import requests
-import statistics
-from datetime import datetime, timedelta
+from datetime import datetime
 from telegram import Bot
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -18,79 +17,95 @@ headers = {
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+# Ligas importantes
+IMPORTANT_LEAGUES = [
+    "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1", "Liga MX",
+    "Eredivisie", "UEFA Champions League", "Leagues Cup"
+]
+
 # 🔍 Obtener partidos de hoy
 def get_today_fixtures():
     today = datetime.now().strftime('%Y-%m-%d')
     params = {"date": today, "timezone": "America/Mexico_City"}
     response = requests.get(BASE_URL, headers=headers, params=params)
     if response.status_code == 200:
-        return response.json().get("response", [])
+        matches = response.json().get("response", [])
+        return [m for m in matches if m.get("league", {}).get("name", "") in IMPORTANT_LEAGUES]
     else:
         print("❌ Error fútbol:", response.text)
         return []
 
-# 🧠 Análisis experto por partido
-def analyze_match_v2(match):
+# 🧠 Análisis experto por partido (1 sola apuesta)
+def analyze_match_v3(match):
+    home = match.get("teams", {}).get("home", {})
+    away = match.get("teams", {}).get("away", {})
+    home_team = home.get("name", "")
+    away_team = away.get("name", "")
     league = match.get("league", {}).get("name", "")
-    home_team = match.get("teams", {}).get("home", {}).get("name", "")
-    away_team = match.get("teams", {}).get("away", {}).get("name", "")
 
     if not home_team or not away_team:
         return None
 
-    stats_home = match.get("statistics", {}).get("home", {})
-    stats_away = match.get("statistics", {}).get("away", {})
+    odds = match.get("odds", {})
+    xg_home = xg_away = 1.1  # Suponemos si no hay datos
 
     try:
-        xg_home = float(stats_home["expected"]["goals"])
-        xg_away = float(stats_away["expected"]["goals"])
-        avg_gf_home = float(stats_home["goals"]["for"]["average"]["total"])
-        avg_gf_away = float(stats_away["goals"]["for"]["average"]["total"])
-        avg_ga_home = float(stats_home["goals"]["against"]["average"]["total"])
-        avg_ga_away = float(stats_away["goals"]["against"]["average"]["total"])
+        stats = match.get("statistics", {})
+        xg_home = float(stats["home"]["expected"]["goals"])
+        xg_away = float(stats["away"]["expected"]["goals"])
     except:
+        pass
+
+    picks = []
+
+    # 1X2 (Ganador)
+    if "1x2" in odds:
+        best = min(odds["1x2"].items(), key=lambda x: x[1])
+        winner = {"home": "Gana local", "draw": "Empate", "away": "Gana visitante"}.get(best[0], "")
+        picks.append({
+            "tipo": "Ganador 1X2",
+            "valor": 100 / best[1],
+            "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* {winner}\n🔢 *Cuota:* {best[1]}\n🎯 *Probabilidad implícita:* {round(100 / best[1], 2)}%"
+        })
+
+    # Doble oportunidad
+    if "doubleChance" in odds:
+        best = min(odds["doubleChance"].items(), key=lambda x: x[1])
+        picks.append({
+            "tipo": "Doble oportunidad",
+            "valor": 100 / best[1],
+            "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Doble oportunidad {best[0]}\n🔢 *Cuota:* {best[1]}\n🎯 *Probabilidad implícita:* {round(100 / best[1], 2)}%"
+        })
+
+    # Over/Under goles
+    if "2.5" in odds:
+        over_odds = odds["2.5"].get("over")
+        under_odds = odds["2.5"].get("under")
+        if over_odds:
+            prob_over = 100 / over_odds
+            picks.append({
+                "tipo": "Over 2.5 goles",
+                "valor": prob_over,
+                "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Over 2.5 goles\n🔢 *Cuota:* {over_odds}\n🧠 *xG:* {xg_home + xg_away:.2f}\n🎯 *Probabilidad implícita:* {round(prob_over, 2)}%"
+            })
+        if under_odds:
+            prob_under = 100 / under_odds
+            picks.append({
+                "tipo": "Under 2.5 goles",
+                "valor": prob_under,
+                "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Under 2.5 goles\n🔢 *Cuota:* {under_odds}\n🧠 *xG:* {xg_home + xg_away:.2f}\n🎯 *Probabilidad implícita:* {round(prob_under, 2)}%"
+            })
+
+    if not picks:
         return None
 
-    avg_total_goals = statistics.mean([avg_gf_home, avg_gf_away, avg_ga_home, avg_ga_away])
-    avg_xg = xg_home + xg_away
-
-    odds = match.get("odds", {}).get("2.5", {})
-    over_odds = float(odds.get("over", 0))
-    under_odds = float(odds.get("under", 0))
-
-    if over_odds > 0:
-        prob_over = round(100 / over_odds, 2)
+    # Elegimos el pick con mayor probabilidad (menor riesgo)
+    best_pick = max(picks, key=lambda x: x["valor"])
+    if best_pick["valor"] < 60:
+        best_pick["text"] += "\n⚠️ *Valor bajo, pick de riesgo. Juega con cautela.*"
     else:
-        prob_over = 0
-
-    if under_odds > 0:
-        prob_under = round(100 / under_odds, 2)
-    else:
-        prob_under = 0
-
-    # --- Lógica flexible para siempre mandar picks ---
-    if avg_total_goals >= 2.5 or avg_xg >= 2.5:
-        confidence = "Alta" if avg_total_goals >= 3 or avg_xg >= 3 else "Media"
-        value_tag = "Valor ALTO" if prob_over < 60 else "Valor BAJO"
-        return {
-            "match": f"{home_team} vs {away_team}",
-            "pick": "Over 2.5 goles",
-            "confidence": confidence,
-            "reason": f"xG: {avg_xg:.2f}, Goles promedio: {avg_total_goals:.2f}, Probabilidad implícita Over: {prob_over}%. {value_tag}."
-        }
-
-    if avg_total_goals < 2.2 and avg_xg < 2.2:
-        confidence = "Alta" if avg_total_goals < 1.8 and avg_xg < 1.8 else "Media"
-        value_tag = "Valor ALTO" if prob_under < 60 else "Valor BAJO"
-        return {
-            "match": f"{home_team} vs {away_team}",
-            "pick": "Under 2.5 goles",
-            "confidence": confidence,
-            "reason": f"xG: {avg_xg:.2f}, Goles promedio: {avg_total_goals:.2f}, Probabilidad implícita Under: {prob_under}%. {value_tag}."
-        }
-
-    # Si no hay tendencia clara, se puede omitir
-    return None
+        best_pick["text"] += "\n✅ *Buena opción con valor aceptable.*"
+    return best_pick["text"]
 
 # 📤 Enviar picks a Telegram
 def send_to_telegram(picks):
@@ -103,16 +118,14 @@ def send_to_telegram(picks):
     else:
         message = "🔥 *PICKS SERPICKS (Manual)* 🔥\n\n"
         for p in picks:
-            message += f"🏟 {p['match']}\n📌 *Pick:* {p['pick']}\n🧠 {p['reason']}\n\n"
-        message += "✅ *Apuesta con estrategia y disciplina.*\n"
+            message += f"{p}\n\n"
+        message += "📈 *Apuesta con cabeza y disciplina.*\n"
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    chunks = [message[i:i+4096] for i in range(0, len(message), 4096)]
 
-    max_length = 4096
-    messages = [message[i:i+max_length] for i in range(0, len(message), max_length)]
-
-    for msg in messages:
-        data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
+    for chunk in chunks:
+        data = {"chat_id": CHAT_ID, "text": chunk, "parse_mode": "Markdown"}
         response = requests.post(url, data=data)
         if response.ok:
             print("✅ Enviado a Telegram")
@@ -125,7 +138,6 @@ def update_google_sheets_summary():
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
         client = gspread.authorize(creds)
-
         sheet = client.open("SERPICKS").sheet1
         now = datetime.now().strftime("%Y-%m-%d")
         sheet.append_row([now, "Auto-run", "Manual execution ran", "", ""])
