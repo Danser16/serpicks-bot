@@ -32,7 +32,7 @@ def get_today_fixtures():
         print("❌ Error fútbol:", response.text)
         return []
 
-# 🔢 Obtener momios del fixture
+# 🔢 Obtener momios reales del fixture
 def get_odds_for_fixture(fixture_id):
     params = {"fixture": fixture_id}
     response = requests.get(ODDS_URL, headers=headers, params=params)
@@ -72,7 +72,14 @@ def get_odds_for_fixture(fixture_id):
                             odds_data.setdefault("handicap", {})[v["value"]] = float(v["odd"])
     return odds_data
 
-# 🧠 Análisis por partido (máx 2 picks variados)
+# 🔁 Conversión de decimal a americano
+def decimal_to_american(decimal_odds):
+    if decimal_odds >= 2:
+        return f"+{round((decimal_odds - 1) * 100)}"
+    else:
+        return f"-{round(100 / (decimal_odds - 1))}"
+
+# 🧠 Análisis por partido (máx 3 picks variados)
 def analyze_match_v4(match):
     home = match.get("teams", {}).get("home", {}).get("name", "")
     away = match.get("teams", {}).get("away", {}).get("name", "")
@@ -92,63 +99,63 @@ def analyze_match_v4(match):
 
     picks = []
 
-    def add_pick(nombre, cuota, texto_base):
+    def add_pick(nombre, cuota, tipo):
         if cuota:
             prob = round(100 / cuota, 2)
+            momio = decimal_to_american(cuota)
             status = "✅ Buena opción con valor aceptable." if prob >= 60 else "⚠️ Pick con valor bajo. Riesgo moderado."
             picks.append({
                 "valor": prob,
-                "texto": f"🏟 {home} vs {away}\n📌 *Pick:* {nombre}\n🔢 *Cuota:* {cuota}\n🎯 *Probabilidad implícita:* {prob}%\n{status}"
+                "tipo": tipo,
+                "texto": f"🏟 {home} vs {away}\n📌 *Pick:* {nombre}\n💰 *Momio:* {momio}\n🎯 *Probabilidad implícita:* {prob}%\n{status}"
             })
 
     # Analizar diferentes mercados
     if "1x2" in odds:
-        best = min(odds["1x2"].items(), key=lambda x: x[1])
-        add_pick(f"Gana {best[0]}", best[1], "1X2")
+        for k, v in odds["1x2"].items():
+            if k in ["Home", "Draw", "Away"]:
+                nombre = {"Home": "Gana local", "Draw": "Empate", "Away": "Gana visitante"}[k]
+                add_pick(nombre, v, "1X2")
 
     if "doubleChance" in odds:
-        best = min(odds["doubleChance"].items(), key=lambda x: x[1])
-        add_pick(f"Doble oportunidad {best[0]}", best[1], "Doble Oportunidad")
+        for k, v in odds["doubleChance"].items():
+            add_pick(f"Doble oportunidad {k}", v, "Doble")
 
     if "2.5" in odds:
-        o = odds["2.5"]
-        if "over" in o:
-            add_pick("Over 2.5 goles", o["over"], "Over goles")
-        if "under" in o:
-            add_pick("Under 2.5 goles", o["under"], "Under goles")
+        if "over" in odds["2.5"]:
+            add_pick("Over 2.5 goles", odds["2.5"]["over"], "Goles")
+        if "under" in odds["2.5"]:
+            add_pick("Under 2.5 goles", odds["2.5"]["under"], "Goles")
 
     if "corners" in odds:
-        c = odds["corners"]
-        if "over" in c:
-            add_pick("Over 9.5 corners", c["over"], "Corners")
-        if "under" in c:
-            add_pick("Under 9.5 corners", c["under"], "Corners")
+        if "over" in odds["corners"]:
+            add_pick("Over 9.5 corners", odds["corners"]["over"], "Corners")
+        if "under" in odds["corners"]:
+            add_pick("Under 9.5 corners", odds["corners"]["under"], "Corners")
 
     if "cards" in odds:
-        c = odds["cards"]
-        if "over" in c:
-            add_pick("Over 4.5 tarjetas", c["over"], "Tarjetas")
-        if "under" in c:
-            add_pick("Under 4.5 tarjetas", c["under"], "Tarjetas")
+        if "over" in odds["cards"]:
+            add_pick("Over 4.5 tarjetas", odds["cards"]["over"], "Tarjetas")
+        if "under" in odds["cards"]:
+            add_pick("Under 4.5 tarjetas", odds["cards"]["under"], "Tarjetas")
 
     if "handicap" in odds:
-        for line, cuota in odds["handicap"].items():
-            add_pick(f"Hándicap {line}", cuota, "Hándicap")
+        for k, v in odds["handicap"].items():
+            add_pick(f"Hándicap {k}", v, "Handicap")
 
     if not picks:
         return None
 
-    # Ordenar por valor y seleccionar máximo 2 picks variados
+    # Elegir máximo 3 picks de tipo diferente
     picks = sorted(picks, key=lambda x: x["valor"], reverse=True)
-    unique_types = set()
+    tipos_usados = set()
     final_picks = []
 
     for p in picks:
-        tipo = p["texto"].split("📌")[1].split(":")[1].split()[0]
-        if tipo not in unique_types:
-            unique_types.add(tipo)
+        if p["tipo"] not in tipos_usados:
             final_picks.append(p["texto"])
-        if len(final_picks) == 2:
+            tipos_usados.add(p["tipo"])
+        if len(final_picks) == 3:
             break
 
     return final_picks
