@@ -20,19 +20,17 @@ IMPORTANT_LEAGUES = [
     "Liga MX", "Eredivisie", "UEFA Champions League", "Leagues Cup"
 ]
 
-# 🔍 Obtener partidos de hoy
 def get_today_fixtures():
     today = datetime.now().strftime('%Y-%m-%d')
     params = {"date": today, "timezone": "America/Mexico_City"}
     response = requests.get(BASE_URL, headers=headers, params=params)
     if response.status_code == 200:
         matches = response.json().get("response", [])
-        return [m for m in matches if m.get("league", {}).get("name", "") in IMPORTANT_LEAGUES]
+        return [m for m in matches if any(liga in m.get("league", {}).get("name", "") for liga in IMPORTANT_LEAGUES)]
     else:
         print("❌ Error fútbol:", response.text)
         return []
 
-# 🔢 Obtener momios reales del fixture
 def get_odds_for_fixture(fixture_id):
     params = {"fixture": fixture_id}
     response = requests.get(ODDS_URL, headers=headers, params=params)
@@ -72,23 +70,26 @@ def get_odds_for_fixture(fixture_id):
                             odds_data.setdefault("handicap", {})[v["value"]] = float(v["odd"])
     return odds_data
 
-# 🔁 Conversión de decimal a americano
 def decimal_to_american(decimal_odds):
     if decimal_odds >= 2:
         return f"+{round((decimal_odds - 1) * 100)}"
     else:
         return f"-{round(100 / (decimal_odds - 1))}"
 
-# 🧠 Análisis por partido (máx 3 picks variados)
 def analyze_match_v4(match):
     home = match.get("teams", {}).get("home", {}).get("name", "")
     away = match.get("teams", {}).get("away", {}).get("name", "")
     fixture_id = match.get("fixture", {}).get("id")
-    if not home or not away or not fixture_id:
+    date_str = match.get("fixture", {}).get("date", "")
+    if not home or not away or not fixture_id or not date_str:
         return None
 
+    # Formatear fecha y hora
+    fixture_datetime = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
+    formatted_datetime = fixture_datetime.strftime("%d %B %Y - %H:%M hrs")
+
     odds = get_odds_for_fixture(fixture_id)
-    xg_home = xg_away = 1.1  # por si no hay stats
+    xg_home = xg_away = 1.1
 
     try:
         stats = match.get("statistics", {})
@@ -97,6 +98,7 @@ def analyze_match_v4(match):
     except:
         pass
 
+    total_expected_goals = round(xg_home + xg_away, 2)
     picks = []
 
     def add_pick(nombre, cuota, tipo):
@@ -107,10 +109,9 @@ def analyze_match_v4(match):
             picks.append({
                 "valor": prob,
                 "tipo": tipo,
-                "texto": f"🏟 {home} vs {away}\n📌 *Pick:* {nombre}\n💰 *Momio:* {momio}\n🎯 *Probabilidad implícita:* {prob}%\n{status}"
+                "texto": f"🏟 {home} vs {away}\n🗓 {formatted_datetime}\n📌 *Pick:* {nombre}\n💰 *Momio:* {momio}\n🎯 *Probabilidad implícita:* {prob}%\n🧠 *Se esperan aproximadamente {total_expected_goals} goles en el partido.*\n{status}"
             })
 
-    # Analizar diferentes mercados
     if "1x2" in odds:
         for k, v in odds["1x2"].items():
             if k in ["Home", "Draw", "Away"]:
@@ -146,7 +147,6 @@ def analyze_match_v4(match):
     if not picks:
         return None
 
-    # Elegir máximo 3 picks de tipo diferente
     picks = sorted(picks, key=lambda x: x["valor"], reverse=True)
     tipos_usados = set()
     final_picks = []
@@ -160,7 +160,6 @@ def analyze_match_v4(match):
 
     return final_picks
 
-# 📤 Enviar picks a Telegram
 def send_to_telegram(picks):
     if not BOT_TOKEN or not CHAT_ID:
         print("❌ Faltan variables de entorno.")
