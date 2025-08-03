@@ -1,7 +1,6 @@
 import os
 import requests
 from datetime import datetime
-from telegram import Bot
 
 # API-Football
 API_KEY = os.getenv("API_FOOTBALL_KEY")
@@ -16,7 +15,6 @@ headers = {
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# Ligas importantes
 IMPORTANT_LEAGUES = [
     "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1",
     "Liga MX", "Eredivisie", "UEFA Champions League", "Leagues Cup"
@@ -34,55 +32,56 @@ def get_today_fixtures():
         print("❌ Error fútbol:", response.text)
         return []
 
-# 🔢 Obtener momios reales del fixture
+# 🔢 Obtener momios del fixture
 def get_odds_for_fixture(fixture_id):
     params = {"fixture": fixture_id}
     response = requests.get(ODDS_URL, headers=headers, params=params)
-    
+    odds_data = {}
+
     if response.status_code == 200:
         data = response.json()
         if data["response"]:
             bookmakers = data["response"][0].get("bookmakers", [])
             if not bookmakers:
                 return {}
-            markets = bookmakers[0].get("bets", [])
-            odds_data = {}
-            for market in markets:
-                name = market.get("name", "")
-                values = market.get("values", [])
+            bets = bookmakers[0].get("bets", [])
+            for bet in bets:
+                name = bet.get("name", "")
+                values = bet.get("values", [])
                 if name == "Match Winner":
-                    odds_data["1x2"] = {
-                        "home": float(values[0]["odd"]),
-                        "draw": float(values[1]["odd"]),
-                        "away": float(values[2]["odd"])
-                    }
+                    odds_data["1x2"] = {v["value"]: float(v["odd"]) for v in values}
                 elif name == "Double Chance":
-                    odds_data["doubleChance"] = {
-                        val["value"]: float(val["odd"]) for val in values
-                    }
+                    odds_data["doubleChance"] = {v["value"]: float(v["odd"]) for v in values}
                 elif name == "Over/Under":
-                    for val in values:
-                        if val["value"] == "Over 2.5":
-                            odds_data.setdefault("2.5", {})["over"] = float(val["odd"])
-                        elif val["value"] == "Under 2.5":
-                            odds_data.setdefault("2.5", {})["under"] = float(val["odd"])
-            return odds_data
-    return {}
+                    for v in values:
+                        if v["value"] == "Over 2.5":
+                            odds_data.setdefault("2.5", {})["over"] = float(v["odd"])
+                        elif v["value"] == "Under 2.5":
+                            odds_data.setdefault("2.5", {})["under"] = float(v["odd"])
+                        elif v["value"] == "Over 9.5 corners":
+                            odds_data.setdefault("corners", {})["over"] = float(v["odd"])
+                        elif v["value"] == "Under 9.5 corners":
+                            odds_data.setdefault("corners", {})["under"] = float(v["odd"])
+                        elif v["value"] == "Over 4.5 cards":
+                            odds_data.setdefault("cards", {})["over"] = float(v["odd"])
+                        elif v["value"] == "Under 4.5 cards":
+                            odds_data.setdefault("cards", {})["under"] = float(v["odd"])
+                elif name == "Handicap":
+                    for v in values:
+                        if "+1" in v["value"] or "-1" in v["value"]:
+                            odds_data.setdefault("handicap", {})[v["value"]] = float(v["odd"])
+    return odds_data
 
-# 🧠 Análisis por partido
-def analyze_match_v3(match):
-    home = match.get("teams", {}).get("home", {})
-    away = match.get("teams", {}).get("away", {})
-    home_team = home.get("name", "")
-    away_team = away.get("name", "")
+# 🧠 Análisis por partido (máx 2 picks variados)
+def analyze_match_v4(match):
+    home = match.get("teams", {}).get("home", {}).get("name", "")
+    away = match.get("teams", {}).get("away", {}).get("name", "")
     fixture_id = match.get("fixture", {}).get("id")
-
-    if not home_team or not away_team or not fixture_id:
+    if not home or not away or not fixture_id:
         return None
 
     odds = get_odds_for_fixture(fixture_id)
-
-    xg_home = xg_away = 1.1  # Supuesto si no hay datos
+    xg_home = xg_away = 1.1  # por si no hay stats
 
     try:
         stats = match.get("statistics", {})
@@ -93,54 +92,66 @@ def analyze_match_v3(match):
 
     picks = []
 
-    # 🏆 Ganador
+    def add_pick(nombre, cuota, texto_base):
+        if cuota:
+            prob = round(100 / cuota, 2)
+            status = "✅ Buena opción con valor aceptable." if prob >= 60 else "⚠️ Pick con valor bajo. Riesgo moderado."
+            picks.append({
+                "valor": prob,
+                "texto": f"🏟 {home} vs {away}\n📌 *Pick:* {nombre}\n🔢 *Cuota:* {cuota}\n🎯 *Probabilidad implícita:* {prob}%\n{status}"
+            })
+
+    # Analizar diferentes mercados
     if "1x2" in odds:
         best = min(odds["1x2"].items(), key=lambda x: x[1])
-        winner = {"home": "Gana local", "draw": "Empate", "away": "Gana visitante"}.get(best[0], "")
-        picks.append({
-            "tipo": "Ganador 1X2",
-            "valor": 100 / best[1],
-            "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* {winner}\n🔢 *Cuota:* {best[1]}\n🎯 *Probabilidad implícita:* {round(100 / best[1], 2)}%"
-        })
+        add_pick(f"Gana {best[0]}", best[1], "1X2")
 
-    # 🛡 Doble oportunidad
     if "doubleChance" in odds:
         best = min(odds["doubleChance"].items(), key=lambda x: x[1])
-        picks.append({
-            "tipo": "Doble oportunidad",
-            "valor": 100 / best[1],
-            "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Doble oportunidad {best[0]}\n🔢 *Cuota:* {best[1]}\n🎯 *Probabilidad implícita:* {round(100 / best[1], 2)}%"
-        })
+        add_pick(f"Doble oportunidad {best[0]}", best[1], "Doble Oportunidad")
 
-    # 🎯 Over/Under
     if "2.5" in odds:
-        over_odds = odds["2.5"].get("over")
-        under_odds = odds["2.5"].get("under")
-        if over_odds:
-            prob_over = 100 / over_odds
-            picks.append({
-                "tipo": "Over 2.5 goles",
-                "valor": prob_over,
-                "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Over 2.5 goles\n🔢 *Cuota:* {over_odds}\n🧠 *xG:* {xg_home + xg_away:.2f}\n🎯 *Probabilidad implícita:* {round(prob_over, 2)}%"
-            })
-        if under_odds:
-            prob_under = 100 / under_odds
-            picks.append({
-                "tipo": "Under 2.5 goles",
-                "valor": prob_under,
-                "text": f"🏟 {home_team} vs {away_team}\n📌 *Pick:* Under 2.5 goles\n🔢 *Cuota:* {under_odds}\n🧠 *xG:* {xg_home + xg_away:.2f}\n🎯 *Probabilidad implícita:* {round(prob_under, 2)}%"
-            })
+        o = odds["2.5"]
+        if "over" in o:
+            add_pick("Over 2.5 goles", o["over"], "Over goles")
+        if "under" in o:
+            add_pick("Under 2.5 goles", o["under"], "Under goles")
+
+    if "corners" in odds:
+        c = odds["corners"]
+        if "over" in c:
+            add_pick("Over 9.5 corners", c["over"], "Corners")
+        if "under" in c:
+            add_pick("Under 9.5 corners", c["under"], "Corners")
+
+    if "cards" in odds:
+        c = odds["cards"]
+        if "over" in c:
+            add_pick("Over 4.5 tarjetas", c["over"], "Tarjetas")
+        if "under" in c:
+            add_pick("Under 4.5 tarjetas", c["under"], "Tarjetas")
+
+    if "handicap" in odds:
+        for line, cuota in odds["handicap"].items():
+            add_pick(f"Hándicap {line}", cuota, "Hándicap")
 
     if not picks:
         return None
 
-    # Elegir mejor pick
-    best_pick = max(picks, key=lambda x: x["valor"])
-    if best_pick["valor"] < 60:
-        best_pick["text"] += "\n⚠️ *Valor bajo, pick de riesgo. Juega con cautela.*"
-    else:
-        best_pick["text"] += "\n✅ *Buena opción con valor aceptable.*"
-    return best_pick["text"]
+    # Ordenar por valor y seleccionar máximo 2 picks variados
+    picks = sorted(picks, key=lambda x: x["valor"], reverse=True)
+    unique_types = set()
+    final_picks = []
+
+    for p in picks:
+        tipo = p["texto"].split("📌")[1].split(":")[1].split()[0]
+        if tipo not in unique_types:
+            unique_types.add(tipo)
+            final_picks.append(p["texto"])
+        if len(final_picks) == 2:
+            break
+
+    return final_picks
 
 # 📤 Enviar picks a Telegram
 def send_to_telegram(picks):
@@ -151,7 +162,7 @@ def send_to_telegram(picks):
     if not picks:
         message = "⚠️ *No se encontraron picks sólidos para hoy.*\nSigue atento a los análisis. 📊"
     else:
-        message = "🔥 *PICKS SERPICKS (Manual)* 🔥\n\n"
+        message = "🔥 *PICKS SERPICKS (Análisis completo)* 🔥\n\n"
         for p in picks:
             message += f"{p}\n\n"
         message += "📈 *Apuesta con cabeza y disciplina.*\n"
