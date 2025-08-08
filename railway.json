@@ -8,8 +8,8 @@
     "restartPolicyType": "ON_FAILURE"
   },
   "cron": [
-    { "schedule": "30 20 * * *", "command": "python main.py analyze_tomorrow", "timezone": "America/Chicago" },
-    { "schedule": "30 9 * * *",  "command": "python main.py recheck_today",   "timezone": "America/Chicago" },
-    { "schedule": "35 9 * * *",  "command": "python main.py send_today",      "timezone": "America/Chicago" }
+    { "schedule": "30 1 * * *", "command": "python main.py analyze_tomorrow" }, 
+    { "schedule": "30 14 * * *", "command": "python main.py recheck_today" },  
+    { "schedule": "35 14 * * *", "command": "python main.py send_today" }      
   ]
-} 
+}
