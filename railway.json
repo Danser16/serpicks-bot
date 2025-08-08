@@ -12,4 +12,4 @@
     { "schedule": "30 9 * * *",  "command": "python main.py recheck_today",   "timezone": "America/Chicago" },
     { "schedule": "35 9 * * *",  "command": "python main.py send_today",      "timezone": "America/Chicago" }
   ]
-}
+} 
