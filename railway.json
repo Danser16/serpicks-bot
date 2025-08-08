@@ -1,18 +1,15 @@
 {
   "build": {
-    "builder": "Python",
     "buildCommand": "pip install -r requirements.txt",
-    "env": {
-      "PYTHONUNBUFFERED": "1"
-    }
+    "env": { "PYTHONUNBUFFERED": "1" }
   },
   "deploy": {
-    "startCommand": "python main.py",
+    "startCommand": "python main.py send_today",
     "restartPolicyType": "ON_FAILURE"
   },
   "cron": [
-    { "schedule": "30 20 * * *", "command": "python main.py", "timezone": "America/Mexico_City" },
-    { "schedule": "0 21 * * *", "command": "python main.py", "timezone": "America/Mexico_City" },
-    { "schedule": "0 10 * * *", "command": "python main.py", "timezone": "America/Mexico_City" }
+    { "schedule": "30 20 * * *", "command": "python main.py analyze_tomorrow", "timezone": "America/Chicago" },
+    { "schedule": "30 9 * * *",  "command": "python main.py recheck_today",   "timezone": "America/Chicago" },
+    { "schedule": "35 9 * * *",  "command": "python main.py send_today",      "timezone": "America/Chicago" }
   ]
 }
