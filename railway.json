@@ -1,5 +1,7 @@
 {
   "build": {
+    "builder": "Python",
+    "buildCommand": "pip install -r requirements.txt",
     "env": {
       "PYTHONUNBUFFERED": "1"
     }
@@ -7,5 +9,10 @@
   "deploy": {
     "startCommand": "python main.py",
     "restartPolicyType": "ON_FAILURE"
-  }
+  },
+  "cron": [
+    { "schedule": "30 20 * * *", "command": "python main.py", "timezone": "America/Mexico_City" },
+    { "schedule": "0 21 * * *", "command": "python main.py", "timezone": "America/Mexico_City" },
+    { "schedule": "0 10 * * *", "command": "python main.py", "timezone": "America/Mexico_City" }
+  ]
 }
