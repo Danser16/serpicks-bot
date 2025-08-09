@@ -189,3 +189,10 @@ def analyze_today_football():
     if not all_picks and FALLBACK_IF_NO_VALUE:
         return []
     return all_picks
+    # --- Backwards-compat alias to avoid Railway crash ---
+def analyze_football_for(day: str | None = None):
+    """
+    Compatibilidad con versiones anteriores.
+    Ignora el parámetro y analiza los partidos de HOY.
+    """
+    return analyze_today_football()
