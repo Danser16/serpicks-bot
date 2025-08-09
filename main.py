@@ -47,7 +47,7 @@ def build_message_for(d: date):
     # Parlay del día (si hay 2+ con edge positivo)
     parlay = [p for (_, p) in all_picks if (p.get('edge') or -1) > 0][:3]
     parlay_txt = "\n💼 Parlay (valor):\n" + "\n".join(
-        [f"- {pi['home']} vs {pi['away']} | {pi['type']} | {pi['odds_amer']}"] ) if len(parlay) >= 2 else ""
+        [f"- {p['home']} vs {p['away']} | {p['type']} | {p['odds_amer']}"] ) if len(parlay) >= 2 else ""
 
     footer = "\n—\n⚠️ Apuestas responsables. Las probabilidades cambian; verifica alineaciones y clima."
     return header + "\n\n".join(sections) + parlay_txt + footer
