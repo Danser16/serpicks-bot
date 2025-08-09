@@ -163,3 +163,7 @@ def analyze_today_mlb():
         allp.extend(analyze_game(g))
     allp.sort(key=lambda x: (x["edge"] if x["edge"] is not None else -9), reverse=True)
     return allp
+    # --- Backwards-compat alias (para que no se caiga Railway) ---
+def analyze_mlb_for(day: str | None = None):
+    """Compat: ignora el parámetro y analiza los juegos de HOY."""
+    return analyze_today_mlb()
